@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    @apply bg-[#bfe4f7] font-sans text-charcoal-800 antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :focus-visible {
+    outline: 3px solid #2f7cf6;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-white/70 bg-white/90 shadow-panel backdrop-blur-md;
+  }
+  .panel-dark {
+    @apply rounded-2xl border border-white/10 bg-charcoal-900/80 text-white shadow-panel backdrop-blur-md;
+  }
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 font-bold transition active:scale-95 disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-leaf-500 text-white shadow-md hover:bg-leaf-600;
+  }
+  .btn-ghost {
+    @apply btn bg-white text-charcoal-800 ring-1 ring-black/10 hover:bg-gray-50;
+  }
+  .btn-danger {
+    @apply btn bg-sos-500 text-white shadow-md hover:bg-sos-600;
+  }
+  .icon-btn {
+    @apply grid h-11 w-11 place-items-center rounded-xl transition hover:bg-black/5 active:scale-95;
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
