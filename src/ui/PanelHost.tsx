@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useCurrentUser, useStore } from '@/store';
+import { SERVICES, type ServiceId } from '@/features/services/meta';
 import { AvatarCreator } from '@/features/avatar/AvatarCreator';
 import { ChatPanel } from '@/features/chat/ChatPanel';
 import { ResidentsPanel } from '@/features/feed/ResidentsPanel';
@@ -9,6 +10,9 @@ import { RepairPanel } from '@/features/tickets/RepairPanel';
 import { ReportPanel } from '@/features/tickets/ReportPanel';
 import { SuggestPanel } from '@/features/tickets/SuggestPanel';
 import { Modal } from './Modal';
+
+const ServicePanel = lazy(() => import('@/features/services/ServicePanel'));
+const SERVICE_IDS = new Set<string>(SERVICES.map((s) => s.id));
 
 /** Hosts whichever feature panel is open (one at a time). */
 export function PanelHost() {
@@ -38,6 +42,13 @@ export function PanelHost() {
       {panel?.kind === 'decorate' && <DecoratePanel onClose={close} />}
       {panel?.kind === 'chat' && <ChatPanel channelId={panel.channelId} onClose={close} />}
       {panel?.kind === 'residents' && <ResidentsPanel onClose={close} />}
+      {panel && SERVICE_IDS.has(panel.kind) && (
+        <Suspense
+          fallback={<div className="grid h-40 place-items-center text-sm text-gray-400">Loading…</div>}
+        >
+          <ServicePanel id={panel.kind as ServiceId} onClose={close} />
+        </Suspense>
+      )}
     </Modal>
   );
 }

@@ -64,6 +64,33 @@ export function formatMalaysia(date: Date) {
   return { date: `${g('weekday')}, ${g('day')} ${g('month')} ${g('year')}`, time: timeFmt.format(date) };
 }
 
+const isoDateFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** Malaysia-local calendar date as yyyy-MM-dd, `days` from `date`. */
+export function malaysiaDate(date = new Date(), days = 0) {
+  return isoDateFmt.format(new Date(date.getTime() + days * 86_400_000));
+}
+
+/** Instant for a Malaysia-local date ("2026-10-20") and time ("19:30"). Malaysia has no DST. */
+export function malaysiaInstant(date: string, time = '00:00') {
+  return new Date(`${date}T${time}:00+08:00`);
+}
+
+/** "Tue, 20 Oct" for a yyyy-MM-dd date. */
+export function formatDay(date: string) {
+  return formatMalaysia(malaysiaInstant(date, '12:00')).date.replace(/ \d{4}$/, '');
+}
+
+/** "7:30 PM" in Malaysia time. */
+export function formatTime(date: Date) {
+  return timeFmt.format(date);
+}
+
 /** Mock temperature: ~25°C at dawn, ~33°C mid-afternoon. */
 export function mockTemperature(hour: number) {
   const t = Math.max(0, Math.sin((Math.PI * (hour - 7)) / 13));

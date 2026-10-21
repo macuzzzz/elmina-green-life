@@ -83,6 +83,7 @@ src/
 | **Staff** | Guard queue with SOS alerts, management kanban (drag between columns), announcements with 📢 map markers, resident accounts, moderation, overview stats |
 | **Chat** | Guardhouse, management and neighbour DMs with quick replies, read ticks, photos; staff auto-reply after 2–4 s when no staff tab is open |
 | **Home** | My Home (household, my tickets) and Decorate (gate & car colour, garden, festive lights — free) |
+| **Services** | Facility booking (badminton, BBQ, hall), visitor passes with QR codes checked at the gate, events & RSVPs, parcel log, maintenance fee statements (simulated payment), swap corner, lost & found, polls — under **More**, the top nav, the guard drawer and the management **Services** tab |
 
 ### Live two-tab demo
 
@@ -96,4 +97,5 @@ auto-answered, so you can reply by hand.
 1. **World & shell** ✅
 2. **People** ✅ — avatars, thought bubbles, feed, house card, privacy, notifications
 3. **Incidents, repairs & dashboards** ✅ — flows, timelines, guard + management dashboards, chat, cross-tab sync
-4. **Suggest, decorate, announcements & polish** ✅ — backlog items (§5.8) appear as “Coming soon”
+4. **Suggest, decorate, announcements & polish** ✅
+5. **Community services** ✅ — the §5.8 backlog (formerly “Coming soon”) is now built

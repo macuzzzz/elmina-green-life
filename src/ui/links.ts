@@ -42,5 +42,29 @@ export function openLink(link: NonNullable<AppNotification['link']>) {
       if (a) s.toast(`📢 ${a.title} — ${a.body}`);
       break;
     }
+    case 'booking':
+      s.openPanel({ kind: 'facilities' });
+      break;
+    case 'visitor':
+      s.openPanel({ kind: 'visitors' });
+      break;
+    case 'event':
+      s.openPanel({ kind: 'events' });
+      break;
+    case 'parcel':
+      s.openPanel({ kind: 'parcels' });
+      break;
+    case 'fee':
+      s.openPanel({ kind: 'fees' });
+      break;
+    case 'listing':
+      s.openPanel({ kind: 'swap' });
+      break;
+    case 'lost-found':
+      s.openPanel({ kind: 'lostfound' });
+      break;
+    case 'poll':
+      s.openPanel({ kind: 'polls' });
+      break;
   }
 }

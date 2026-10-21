@@ -1,21 +1,16 @@
 import { useMemo, useState } from 'react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { ChevronDown, ShieldCheck } from 'lucide-react';
-import type { Incident } from '@/types';
+import type { Incident, VisitorPass, VisitorStatus } from '@/types';
 import { api } from '@/services/api';
 import { useCurrentUser, useStore } from '@/store';
 import { useIsDesktop } from '@/lib/useMediaQuery';
 import { displayName } from '@/lib/people';
+import { formatDay, malaysiaDate } from '@/lib/time';
 import { cameraController } from '@/world/cameraController';
+import { getLayout } from '@/world/layout';
 import { INCIDENT_FLOW, INCIDENT_STATUS_LABEL, URGENCY, incidentMeta } from '@/features/tickets/meta';
 import { isActiveIncident } from '@/features/tickets/visibility';
-
-const VISITORS = [
-  { name: 'Grab delivery', unit: 'EG18-031', time: '10:12 AM', plate: 'WXY 2231' },
-  { name: 'Aunty Lim (visitor)', unit: 'EG18-028', time: '9:40 AM', plate: 'BKL 8812' },
-  { name: 'Aircon contractor', unit: 'EG18-062', time: '9:05 AM', plate: 'VDE 5120' },
-  { name: 'Lalamove', unit: 'EG18-095', time: '8:51 AM', plate: 'BQR 7741' },
-];
 
 const RANK = { urgent: 0, medium: 1, low: 2 } as const;
 
@@ -26,8 +21,9 @@ export default function GuardDrawer() {
   const users = useStore((s) => s.users);
   const channels = useStore((s) => s.channels);
   const messages = useStore((s) => s.messages);
+  const parcelsWaiting = useStore((s) => s.parcels.filter((p) => !p.collectedAt).length);
   const isDesktop = useIsDesktop();
-  const [tab, setTab] = useState<'queue' | 'chats' | 'visitors'>('queue');
+  const [tab, setTab] = useState<'queue' | 'chats' | 'visitors' | 'parcels'>('queue');
   const [collapsed, setCollapsed] = useState(false);
 
   const queue = useMemo(
@@ -79,6 +75,7 @@ export default function GuardDrawer() {
                 ['queue', `Queue (${queue.length})`],
                 ['chats', `Chats${unreadChats ? ` (${unreadChats})` : ''}`],
                 ['visitors', 'Visitors'],
+                ['parcels', `Parcels${parcelsWaiting ? ` (${parcelsWaiting})` : ''}`],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -166,24 +163,8 @@ export default function GuardDrawer() {
                 })}
               </ul>
             )}
-            {tab === 'visitors' && (
-              <ul className="space-y-1.5 text-sm">
-                {VISITORS.map((v) => (
-                  <li key={v.plate} className="flex justify-between gap-2 rounded-lg bg-white/10 px-3 py-2">
-                    <span className="min-w-0">
-                      <span className="block truncate font-bold">{v.name}</span>
-                      <span className="text-xs text-white/60">
-                        → {v.unit} · {v.plate}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-white/60">{v.time}</span>
-                  </li>
-                ))}
-                <li className="pt-1 text-center text-xs text-white/50">
-                  Visitor registration & QR passes — coming soon
-                </li>
-              </ul>
-            )}
+            {tab === 'visitors' && <VisitorGate />}
+            {tab === 'parcels' && <ParcelDesk />}
           </div>
         </>
       )}
@@ -201,5 +182,245 @@ export default function GuardDrawer() {
     <aside className="panel-dark absolute bottom-4 left-4 top-4 z-30 flex w-[364px] flex-col overflow-hidden">
       {body}
     </aside>
+  );
+}
+
+const darkInput =
+  'w-full rounded-lg bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:ring-2 focus:ring-white/40';
+
+/** Gate desk: verify QR pass codes, check visitors in/out, log walk-ins. */
+function VisitorGate() {
+  const me = useCurrentUser();
+  const visitors = useStore((s) => s.visitors);
+  const toast = useStore((s) => s.toast);
+  const [code, setCode] = useState('');
+  const [checked, setChecked] = useState<string | null>(null);
+  const [walkIn, setWalkIn] = useState({ visitorName: '', unitId: '', plate: '' });
+  const today = malaysiaDate();
+  const todays = visitors.filter((v) => v.date === today);
+  const expected = todays.filter((v) => v.status === 'expected');
+  const inside = visitors.filter((v) => v.status === 'checked-in');
+  const left = todays.filter((v) => v.status === 'checked-out');
+  const found = checked ? visitors.find((v) => v.code === checked) : undefined;
+  const walkInUnit = walkIn.unitId.trim().toUpperCase();
+  const walkInOk = walkIn.visitorName.trim() && getLayout().unitMap.has(walkInUnit);
+  if (!me) return null;
+
+  const set = (id: string, status: VisitorStatus) => void api.updateVisitor(id, me.id, status);
+  const logWalkIn = async () => {
+    if (!walkInOk) return;
+    await api.createVisitor(me.id, {
+      visitorName: walkIn.visitorName.trim(),
+      unitId: walkInUnit,
+      plate: walkIn.plate.trim().toUpperCase() || undefined,
+      date: today,
+    });
+    toast(`Walk-in logged → ${walkInUnit} — resident notified`, 'success');
+    setWalkIn({ visitorName: '', unitId: '', plate: '' });
+  };
+
+  const Row = ({ v, action }: { v: VisitorPass; action?: [string, VisitorStatus] }) => (
+    <li className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm">
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-bold">{v.visitorName}</span>
+        <span className="block truncate text-xs text-white/60">
+          → {v.unitId}
+          {v.plate && ` · ${v.plate}`}
+          {v.checkedInAt &&
+            ` · in ${formatDistanceToNowStrict(new Date(v.checkedInAt), { addSuffix: true })}`}
+        </span>
+      </span>
+      {action && (
+        <button
+          type="button"
+          onClick={() => set(v.id, action[1])}
+          className="h-8 shrink-0 rounded-lg bg-white px-2.5 text-xs font-bold text-charcoal-900 active:scale-95"
+        >
+          {action[0]}
+        </button>
+      )}
+    </li>
+  );
+
+  return (
+    <div className="space-y-3">
+      <form
+        className="rounded-xl bg-white/5 p-2.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setChecked(code.trim().toUpperCase() || null);
+        }}
+      >
+        <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-white/60">
+          Scan / enter pass code
+        </p>
+        <div className="flex gap-1.5">
+          <input
+            className={`${darkInput} font-mono uppercase tracking-widest`}
+            value={code}
+            onChange={(e) => {
+              setCode(e.target.value);
+              setChecked(null);
+            }}
+            placeholder="EG4K7P"
+            maxLength={8}
+            aria-label="Pass code"
+          />
+          <button
+            type="submit"
+            className="h-9 shrink-0 rounded-lg bg-white px-3 text-sm font-bold text-charcoal-900"
+          >
+            Verify
+          </button>
+        </div>
+        {checked && (
+          <div
+            className={`mt-2 rounded-lg p-2.5 text-sm ${found && found.status === 'expected' && found.date === today ? 'bg-emerald-500/25' : 'bg-sos-600/40'}`}
+            role="status"
+          >
+            {!found || found.code === 'WALKIN' ? (
+              '✖ No pass with that code.'
+            ) : found.status === 'cancelled' ? (
+              '✖ This pass was cancelled by the resident.'
+            ) : found.status !== 'expected' ? (
+              `⚠ Already used — ${found.visitorName} is ${found.status === 'checked-in' ? 'inside' : 'gone'}.`
+            ) : found.date !== today ? (
+              `⚠ Valid on ${formatDay(found.date)}, not today.`
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1">
+                  ✔ <b>{found.visitorName}</b> → {found.unitId}
+                  {found.plate && ` · ${found.plate}`}
+                </span>
+                <button
+                  type="button"
+                  className="h-8 rounded-lg bg-white px-2.5 text-xs font-bold text-charcoal-900"
+                  onClick={() => {
+                    set(found.id, 'checked-in');
+                    setCode('');
+                    setChecked(null);
+                    toast(`${found.visitorName} checked in — host notified`, 'success');
+                  }}
+                >
+                  Check in
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </form>
+
+      <section>
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-white/60">
+          Expected today ({expected.length})
+        </p>
+        <ul className="space-y-1.5">
+          {expected.length === 0 && <li className="text-xs text-white/50">No pre-registered visitors.</li>}
+          {expected.map((v) => (
+            <Row key={v.id} v={v} action={['Check in', 'checked-in']} />
+          ))}
+        </ul>
+      </section>
+      <section>
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-white/60">
+          Inside now ({inside.length})
+        </p>
+        <ul className="space-y-1.5">
+          {inside.length === 0 && <li className="text-xs text-white/50">Nobody inside.</li>}
+          {inside.map((v) => (
+            <Row key={v.id} v={v} action={['Check out', 'checked-out']} />
+          ))}
+        </ul>
+      </section>
+      {left.length > 0 && (
+        <section>
+          <p className="mb-1 text-xs font-bold uppercase tracking-wide text-white/60">Left today</p>
+          <ul className="space-y-1.5 opacity-60">
+            {left.map((v) => (
+              <Row key={v.id} v={v} />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <details className="rounded-xl bg-white/5 p-2.5">
+        <summary className="cursor-pointer text-sm font-bold">+ Log a walk-in visitor</summary>
+        <div className="mt-2 grid gap-1.5">
+          <input
+            className={darkInput}
+            value={walkIn.visitorName}
+            onChange={(e) => setWalkIn({ ...walkIn, visitorName: e.target.value })}
+            placeholder="Visitor / company name"
+            aria-label="Visitor name"
+          />
+          <div className="grid grid-cols-2 gap-1.5">
+            <input
+              className={darkInput}
+              value={walkIn.unitId}
+              onChange={(e) => setWalkIn({ ...walkIn, unitId: e.target.value })}
+              placeholder="Unit EG18-031"
+              aria-label="Unit"
+            />
+            <input
+              className={`${darkInput} uppercase`}
+              value={walkIn.plate}
+              onChange={(e) => setWalkIn({ ...walkIn, plate: e.target.value })}
+              placeholder="Plate"
+              aria-label="Car plate"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={!walkInOk}
+            onClick={logWalkIn}
+            className="h-9 rounded-lg bg-white text-sm font-bold text-charcoal-900 disabled:opacity-40"
+          >
+            Let in & notify resident
+          </button>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+/** Parcels held at the guardhouse. */
+function ParcelDesk() {
+  const parcels = useStore((s) => s.parcels);
+  const waiting = parcels.filter((p) => !p.collectedAt);
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => useStore.getState().openPanel({ kind: 'parcels' })}
+        className="h-10 w-full rounded-lg bg-white text-sm font-bold text-charcoal-900 active:scale-[0.98]"
+      >
+        📦 Log a parcel
+      </button>
+      <ul className="space-y-1.5 text-sm">
+        {waiting.length === 0 && (
+          <li className="rounded-xl bg-white/5 p-4 text-center text-white/60">No parcels waiting ✨</li>
+        )}
+        {waiting.map((p) => (
+          <li key={p.id} className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-bold">
+                {p.unitId} · {p.courier}
+              </span>
+              <span className="block truncate text-xs text-white/60">
+                {p.note && `${p.note} · `}
+                {formatDistanceToNowStrict(new Date(p.loggedAt), { addSuffix: true })}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => void api.collectParcel(p.id)}
+              className="h-8 shrink-0 rounded-lg bg-white px-2.5 text-xs font-bold text-charcoal-900 active:scale-95"
+            >
+              Handed over
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

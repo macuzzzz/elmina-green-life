@@ -257,6 +257,115 @@ export interface Announcement {
   publishedAt: string;
 }
 
+// ── community services (formerly the "Coming soon" backlog) ─────────
+
+export type FacilityId = 'badminton' | 'bbq' | 'hall';
+
+export interface FacilityBooking {
+  id: string;
+  facilityId: FacilityId;
+  userId: string;
+  /** Malaysia-local date, yyyy-MM-dd. */
+  date: string;
+  /** Slot start, "HH:mm" (24h). */
+  slot: string;
+  createdAt: string;
+  cancelled?: boolean;
+}
+
+export type VisitorStatus = 'expected' | 'checked-in' | 'checked-out' | 'cancelled';
+
+export interface VisitorPass {
+  id: string;
+  /** Resident who registered the visitor; absent for guard-logged walk-ins. */
+  hostId?: string;
+  unitId: UnitId;
+  visitorName: string;
+  plate?: string;
+  /** Malaysia-local date the pass is valid for, yyyy-MM-dd. */
+  date: string;
+  /** Short code encoded in the QR pass; guards verify it at the gate. */
+  code: string;
+  status: VisitorStatus;
+  createdAt: string;
+  checkedInAt?: string;
+  checkedOutAt?: string;
+}
+
+export interface CommunityEvent {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  venue: string;
+  location?: MapLocation;
+  startsAt: string;
+  endsAt: string;
+  organiserId: string;
+  rsvps: string[];
+  capacity?: number;
+  createdAt: string;
+}
+
+export interface Parcel {
+  id: string;
+  unitId: UnitId;
+  courier: string;
+  note?: string;
+  loggedBy: string;
+  loggedAt: string;
+  collectedAt?: string;
+}
+
+export interface FeeStatement {
+  id: string;
+  unitId: UnitId;
+  /** Billing month, yyyy-MM. */
+  period: string;
+  items: { label: string; amount: number }[];
+  dueDate: string;
+  paidAt?: string;
+  reference?: string;
+}
+
+export type ListingKind = 'giveaway' | 'swap' | 'sale';
+
+export interface Listing {
+  id: string;
+  authorId: string;
+  kind: ListingKind;
+  title: string;
+  description: string;
+  /** RM, for sale items. */
+  price?: number;
+  photoUrl?: string;
+  status: 'available' | 'reserved' | 'gone';
+  createdAt: string;
+}
+
+export interface LostFoundItem {
+  id: string;
+  authorId: string;
+  kind: 'lost' | 'found';
+  title: string;
+  description: string;
+  where: string;
+  photoUrl?: string;
+  resolved: boolean;
+  createdAt: string;
+}
+
+export interface Poll {
+  id: string;
+  authorId: string;
+  question: string;
+  options: { id: string; label: string; votes: string[] }[];
+  /** Empty = all precincts. */
+  targetPrecincts: PrecinctId[];
+  closesAt: string;
+  createdAt: string;
+}
+
 export interface AppNotification {
   id: string;
   userId: string;
@@ -264,7 +373,24 @@ export interface AppNotification {
   body: string;
   createdAt: string;
   read: boolean;
-  link?: { kind: 'incident' | 'repair' | 'suggestion' | 'post' | 'message' | 'announcement'; id: string };
+  link?: {
+    kind:
+      | 'incident'
+      | 'repair'
+      | 'suggestion'
+      | 'post'
+      | 'message'
+      | 'announcement'
+      | 'booking'
+      | 'visitor'
+      | 'event'
+      | 'parcel'
+      | 'fee'
+      | 'listing'
+      | 'lost-found'
+      | 'poll';
+    id: string;
+  };
 }
 
 export interface Session {

@@ -16,6 +16,14 @@ const LOADERS: Record<Key, () => Promise<DataSlice[Key]>> = {
   channels: api.listChannels,
   messages: api.listMessages,
   notifications: api.listNotifications,
+  bookings: api.listBookings,
+  visitors: api.listVisitors,
+  events: api.listEvents,
+  parcels: api.listParcels,
+  fees: api.listFees,
+  listings: api.listListings,
+  lostFound: api.listLostFound,
+  polls: api.listPolls,
 };
 
 async function load(keys: Key[]) {

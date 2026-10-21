@@ -4,6 +4,7 @@ import {
   Building2,
   ChevronDown,
   ClipboardList,
+  LayoutGrid,
   Megaphone,
   MessageCircle,
   ShieldBan,
@@ -14,6 +15,8 @@ import { PRECINCTS } from '@/data/township';
 import { api } from '@/services/api';
 import { useCurrentUser, useStore, type Selection } from '@/store';
 import { useIsDesktop } from '@/lib/useMediaQuery';
+import { malaysiaDate } from '@/lib/time';
+import { SERVICES, type ServiceId } from '@/features/services/meta';
 import { Avatar } from '@/ui/Avatar';
 import { Field, inputCls } from '@/ui/Modal';
 import { cameraController } from '@/world/cameraController';
@@ -30,6 +33,7 @@ import {
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Building2 },
   { id: 'tickets', label: 'Tickets', icon: ClipboardList },
+  { id: 'services', label: 'Services', icon: LayoutGrid },
   { id: 'announce', label: 'Announce', icon: Megaphone },
   { id: 'residents', label: 'Residents', icon: Users },
   { id: 'moderation', label: 'Moderation', icon: ShieldBan },
@@ -93,6 +97,7 @@ export default function ManagementPanel() {
           <div className="scroll-thin min-h-0 flex-1 overflow-y-auto p-4 pt-2">
             {tab === 'overview' && <Overview />}
             {tab === 'tickets' && <Tickets />}
+            {tab === 'services' && <Services />}
             {tab === 'announce' && <Announce />}
             {tab === 'residents' && <Residents />}
             {tab === 'moderation' && <Moderation />}
@@ -352,6 +357,55 @@ function Tickets() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ── community services ───────────────────────────────────────────
+
+function Services() {
+  const bookings = useStore((s) => s.bookings);
+  const visitors = useStore((s) => s.visitors);
+  const events = useStore((s) => s.events);
+  const parcels = useStore((s) => s.parcels);
+  const fees = useStore((s) => s.fees);
+  const listings = useStore((s) => s.listings);
+  const lostFound = useStore((s) => s.lostFound);
+  const polls = useStore((s) => s.polls);
+  const openPanel = useStore((s) => s.openPanel);
+
+  const stats = useMemo(() => {
+    const now = Date.now();
+    const today = malaysiaDate();
+    const period = [...new Set(fees.map((f) => f.period))].sort().at(-1);
+    const current = fees.filter((f) => f.period === period);
+    const paid = current.filter((f) => f.paidAt).length;
+    return {
+      facilities: `${bookings.filter((b) => !b.cancelled && b.date === today).length} today`,
+      visitors: `${visitors.filter((v) => v.date === today && v.status === 'expected').length} expected`,
+      events: `${events.filter((e) => new Date(e.endsAt).getTime() > now).length} upcoming`,
+      parcels: `${parcels.filter((p) => !p.collectedAt).length} waiting`,
+      fees: `${current.length ? Math.round((paid / current.length) * 100) : 0}% collected`,
+      swap: `${listings.filter((l) => l.status !== 'gone').length} listed`,
+      lostfound: `${lostFound.filter((i) => !i.resolved).length} open`,
+      polls: `${polls.filter((p) => new Date(p.closesAt).getTime() > now).length} open`,
+    } satisfies Record<ServiceId, string>;
+  }, [bookings, visitors, events, parcels, fees, listings, lostFound, polls]);
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {SERVICES.map((sv) => (
+        <button
+          key={sv.id}
+          type="button"
+          onClick={() => openPanel({ kind: sv.id })}
+          className="flex flex-col items-start gap-0.5 rounded-2xl bg-gray-50 p-3 text-left transition hover:bg-gray-100 active:scale-[0.98]"
+        >
+          <span className="text-2xl">{sv.icon}</span>
+          <span className="text-sm font-bold leading-tight">{sv.label}</span>
+          <span className="text-xs font-semibold text-tool-600">{stats[sv.id]}</span>
+        </button>
+      ))}
     </div>
   );
 }

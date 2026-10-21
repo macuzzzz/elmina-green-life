@@ -3,9 +3,16 @@ import type {
   Announcement,
   AppNotification,
   Channel,
+  CommunityEvent,
+  FacilityBooking,
+  FeeStatement,
   Incident,
+  Listing,
+  LostFoundItem,
   MapLocation,
   Message,
+  Parcel,
+  Poll,
   Post,
   RepairRequest,
   Role,
@@ -13,8 +20,10 @@ import type {
   Suggestion,
   SuggestionItem,
   User,
+  VisitorPass,
 } from '@/types';
 import type { EmergencyContact } from '@/data/emergency';
+import type { ServiceId } from '@/features/services/meta';
 
 export type Lod = 'far' | 'mid' | 'near';
 export type Tool = 'select' | 'report' | 'repair' | 'suggest' | 'decorate' | 'community' | 'more';
@@ -37,6 +46,7 @@ export type Panel =
   | { kind: 'decorate' }
   | { kind: 'chat'; channelId?: string }
   | { kind: 'residents' }
+  | { kind: ServiceId }
   | null;
 
 export interface Toast {
@@ -55,6 +65,14 @@ export interface DataSlice {
   channels: Channel[];
   messages: Message[];
   notifications: AppNotification[];
+  bookings: FacilityBooking[];
+  visitors: VisitorPass[];
+  events: CommunityEvent[];
+  parcels: Parcel[];
+  fees: FeeStatement[];
+  listings: Listing[];
+  lostFound: LostFoundItem[];
+  polls: Poll[];
   dataLoaded: boolean;
 }
 
@@ -132,6 +150,14 @@ export const useStore = create<AppState>()((set, get) => ({
   channels: [],
   messages: [],
   notifications: [],
+  bookings: [],
+  visitors: [],
+  events: [],
+  parcels: [],
+  fees: [],
+  listings: [],
+  lostFound: [],
+  polls: [],
   dataLoaded: false,
 
   lod: 'far',

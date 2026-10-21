@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useCurrentUser, useStore, type Tool } from '@/store';
 import { SUGGESTION_ITEMS } from '@/features/tickets/meta';
+import { SERVICES } from '@/features/services/meta';
 import { isPlacementTool } from '@/features/tickets/placement';
 import { getLayout } from '@/world/layout';
 
@@ -26,17 +27,6 @@ const TOOLS: { id: Tool; label: string; icon: LucideIcon }[] = [
   { id: 'suggest', label: 'Suggest', icon: Lightbulb },
   { id: 'decorate', label: 'Decorate', icon: Paintbrush },
   { id: 'community', label: 'Community', icon: UsersRound },
-];
-
-export const BACKLOG = [
-  '🏸 Facility booking',
-  '🪪 Visitor passes & QR',
-  '📅 Events & RSVPs',
-  '📦 Parcel log',
-  '🧾 Maintenance fees',
-  '🛍️ Swap corner',
-  '🔎 Lost & found',
-  '📊 Polls & surveys',
 ];
 
 /** Opens the feed: expands the phone sheet / focuses the desktop composer. */
@@ -101,7 +91,7 @@ export function Toolbar({ variant = 'floating' }: { variant?: 'floating' | 'tabs
             initial={{ opacity: 0, y: 8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.96 }}
-            className="panel absolute bottom-full right-0 mb-2 w-64 p-2"
+            className="panel absolute bottom-full right-0 mb-2 w-72 p-2"
             role="menu"
           >
             {[
@@ -122,22 +112,23 @@ export function Toolbar({ variant = 'floating' }: { variant?: 'floating' | 'tabs
                 <m.icon className="h-4 w-4" /> {m.label}
               </button>
             ))}
-            <p className="px-2 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-gray-500">
-              Coming soon
-            </p>
-            <ul>
-              {BACKLOG.map((b) => (
-                <li
-                  key={b}
-                  className="flex items-center justify-between rounded-lg px-2 py-1 text-sm text-gray-500"
+            <p className="px-2 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-gray-500">Services</p>
+            <div className="grid grid-cols-2 gap-1">
+              {SERVICES.map((sv) => (
+                <button
+                  key={sv.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    openPanel({ kind: sv.id });
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg px-2 py-2 text-left text-xs font-bold leading-tight hover:bg-gray-100"
                 >
-                  {b}
-                  <span className="rounded-full bg-amber-100 px-2 text-[10px] font-bold uppercase text-amber-700">
-                    Soon
-                  </span>
-                </li>
+                  <span className="text-base">{sv.icon}</span> {sv.label}
+                </button>
               ))}
-            </ul>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

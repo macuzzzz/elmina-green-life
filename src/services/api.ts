@@ -3,11 +3,20 @@ import type {
   AppNotification,
   Channel,
   ChannelKind,
+  CommunityEvent,
+  FacilityBooking,
+  FacilityId,
+  FeeStatement,
   Incident,
   IncidentCategory,
   IncidentStatus,
+  Listing,
+  ListingKind,
+  LostFoundItem,
   MapLocation,
   Message,
+  Parcel,
+  Poll,
   Post,
   ReactionKind,
   RepairCategory,
@@ -20,6 +29,8 @@ import type {
   SuggestionStatus,
   Urgency,
   User,
+  VisitorPass,
+  VisitorStatus,
 } from '@/types';
 import { mockApi } from './mockApi';
 
@@ -55,6 +66,47 @@ export interface NewResidentInput {
   household: 'owner' | 'tenant' | 'family';
 }
 
+export interface NewBookingInput {
+  facilityId: FacilityId;
+  date: string;
+  slot: string;
+}
+
+export interface NewVisitorInput {
+  unitId: string;
+  visitorName: string;
+  plate?: string;
+  date: string;
+}
+
+export type NewEventInput = Pick<
+  CommunityEvent,
+  'title' | 'description' | 'icon' | 'venue' | 'location' | 'startsAt' | 'endsAt' | 'capacity'
+>;
+
+export interface NewParcelInput {
+  unitId: string;
+  courier: string;
+  note?: string;
+}
+
+export interface NewListingInput {
+  kind: ListingKind;
+  title: string;
+  description: string;
+  price?: number;
+  photoUrl?: string;
+}
+
+export type NewLostFoundInput = Pick<LostFoundItem, 'kind' | 'title' | 'description' | 'where' | 'photoUrl'>;
+
+export interface NewPollInput {
+  question: string;
+  options: string[];
+  targetPrecincts: string[];
+  closesAt: string;
+}
+
 export type Collection =
   | 'users'
   | 'posts'
@@ -65,6 +117,14 @@ export type Collection =
   | 'channels'
   | 'messages'
   | 'notifications'
+  | 'bookings'
+  | 'visitors'
+  | 'events'
+  | 'parcels'
+  | 'fees'
+  | 'listings'
+  | 'lostFound'
+  | 'polls'
   | 'all';
 
 /** Events pushed to subscribers when data changes (locally or in another tab). */
@@ -132,6 +192,48 @@ export interface Api {
 
   listNotifications(): Promise<AppNotification[]>;
   markNotificationsRead(userId: string): Promise<void>;
+
+  // ── community services ──
+  listBookings(): Promise<FacilityBooking[]>;
+  /** Rejects when the slot is already taken. */
+  createBooking(userId: string, input: NewBookingInput): Promise<FacilityBooking>;
+  cancelBooking(id: string, byUserId: string): Promise<void>;
+
+  listVisitors(): Promise<VisitorPass[]>;
+  /** Residents pre-register (status "expected"); guards log walk-ins (status "checked-in"). */
+  createVisitor(byUserId: string, input: NewVisitorInput): Promise<VisitorPass>;
+  updateVisitor(id: string, byUserId: string, status: VisitorStatus): Promise<void>;
+
+  listEvents(): Promise<CommunityEvent[]>;
+  createEvent(organiserId: string, input: NewEventInput): Promise<CommunityEvent>;
+  /** Rejects when the event is full. */
+  toggleRsvp(id: string, userId: string): Promise<void>;
+  cancelEvent(id: string): Promise<void>;
+
+  listParcels(): Promise<Parcel[]>;
+  logParcel(byUserId: string, input: NewParcelInput): Promise<Parcel>;
+  collectParcel(id: string): Promise<void>;
+
+  listFees(): Promise<FeeStatement[]>;
+  /** Demo only — no real payment is taken. */
+  payFee(id: string, userId: string): Promise<void>;
+  remindFee(id: string): Promise<void>;
+
+  listListings(): Promise<Listing[]>;
+  createListing(authorId: string, input: NewListingInput): Promise<Listing>;
+  updateListing(id: string, status: Listing['status']): Promise<void>;
+  removeListing(id: string): Promise<void>;
+
+  listLostFound(): Promise<LostFoundItem[]>;
+  createLostFound(authorId: string, input: NewLostFoundInput): Promise<LostFoundItem>;
+  resolveLostFound(id: string): Promise<void>;
+  removeLostFound(id: string): Promise<void>;
+
+  listPolls(): Promise<Poll[]>;
+  createPoll(authorId: string, input: NewPollInput): Promise<Poll>;
+  /** One vote per resident; voting again moves the vote. */
+  votePoll(id: string, optionId: string, userId: string): Promise<void>;
+  closePoll(id: string): Promise<void>;
 
   /** Staff tabs ping this so residents get live replies instead of auto-replies. */
   heartbeat(role: Role): void;

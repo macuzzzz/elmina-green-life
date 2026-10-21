@@ -200,7 +200,7 @@ export function WeatherClock({ compact = false }: { compact?: boolean }) {
 }
 
 export function NavBar({ role }: { role: string }) {
-  const toast = useStore((s) => s.toast);
+  const openPanel = useStore((s) => s.openPanel);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const items = [
     {
@@ -219,15 +219,13 @@ export function NavBar({ role }: { role: string }) {
       id: 'events',
       label: 'Events',
       icon: CalendarDays,
-      soon: true,
-      onClick: () => toast('Events — coming soon 📅'),
+      onClick: () => openPanel({ kind: 'events' }),
     },
     {
       id: 'facilities',
       label: 'Facilities',
       icon: Dumbbell,
-      soon: true,
-      onClick: () => toast('Facility booking — coming soon 🏸'),
+      onClick: () => openPanel({ kind: 'facilities' }),
     },
     { id: 'settings', label: 'Settings', icon: Settings, onClick: () => setSettingsOpen(true) },
   ].filter((i) => role === 'resident' || i.id === 'settings' || i.id === 'residents');
@@ -242,11 +240,6 @@ export function NavBar({ role }: { role: string }) {
         >
           <it.icon className="h-6 w-6" />
           <span className="text-[11px] font-semibold xl:text-xs">{it.label}</span>
-          {it.soon && (
-            <span className="absolute right-0.5 top-0.5 rounded-full bg-amber-400 px-1 text-[8px] font-extrabold uppercase leading-[12px] text-charcoal-900">
-              Soon
-            </span>
-          )}
         </button>
       ))}
     </nav>

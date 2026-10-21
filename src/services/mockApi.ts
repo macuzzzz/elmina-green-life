@@ -2,14 +2,22 @@ import type {
   Announcement,
   AppNotification,
   Channel,
+  CommunityEvent,
+  FacilityBooking,
+  FeeStatement,
   Incident,
+  Listing,
+  LostFoundItem,
   Message,
+  Parcel,
+  Poll,
   Post,
   RepairRequest,
   Role,
   Session,
   Suggestion,
   User,
+  VisitorPass,
 } from '@/types';
 import { DEMO_GUARD_ID, DEMO_MANAGER_ID, DEMO_RESIDENT_ID, SEED_USERS } from '@/data/seed/users';
 import {
@@ -22,6 +30,17 @@ import {
   seedRepairs,
   seedSuggestions,
 } from '@/data/seed/content';
+import {
+  seedBookings,
+  seedEvents,
+  seedFees,
+  seedListings,
+  seedLostFound,
+  seedParcels,
+  seedPolls,
+  seedVisitors,
+} from '@/data/seed/services';
+import { facilityMeta } from '@/features/services/meta';
 import { randomAvatar } from '@/features/avatar/avatarParts';
 import type { Api, ApiEvent, Collection } from './api';
 
@@ -40,6 +59,14 @@ interface Db {
   channels: Channel[];
   messages: Message[];
   notifications: AppNotification[];
+  bookings: FacilityBooking[];
+  visitors: VisitorPass[];
+  events: CommunityEvent[];
+  parcels: Parcel[];
+  fees: FeeStatement[];
+  listings: Listing[];
+  lostFound: LostFoundItem[];
+  polls: Poll[];
 }
 
 function freshDb(): Db {
@@ -53,6 +80,14 @@ function freshDb(): Db {
     channels: seedChannels(),
     messages: seedMessages(),
     notifications: seedNotifications(),
+    bookings: seedBookings(),
+    visitors: seedVisitors(),
+    events: seedEvents(),
+    parcels: seedParcels(),
+    fees: seedFees(),
+    listings: seedListings(),
+    lostFound: seedLostFound(),
+    polls: seedPolls(),
   };
 }
 
@@ -135,6 +170,27 @@ const DEMO_IDS: Record<Role, string> = {
 };
 
 const staffIds = (role: 'guard' | 'management') => db.users.filter((u) => u.role === role).map((u) => u.id);
+const unitResidentIds = (unitId: string) =>
+  db.users.filter((u) => u.role === 'resident' && u.unitId === unitId).map((u) => u.id);
+const residentIdsIn = (precincts: string[]) =>
+  db.users
+    .filter(
+      (u) =>
+        u.role === 'resident' &&
+        (precincts.length === 0 || precincts.includes(u.unitId?.split('-')[0] ?? '')),
+    )
+    .map((u) => u.id);
+const firstName = (id: string) => db.users.find((u) => u.id === id)?.name.split(' ')[0] ?? 'A resident';
+
+/** Gate code for a visitor pass, e.g. "EG7K2P" (no look-alike characters). */
+function passCode() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let code: string;
+  do {
+    code = 'EG' + Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  } while (db.visitors.some((v) => v.code === code));
+  return code;
+}
 
 function notify(userIds: string[], title: string, body: string, link?: AppNotification['link']) {
   for (const userId of new Set(userIds)) {
@@ -598,6 +654,269 @@ export const mockApi: Api = {
       }
     }
     if (changed) commit('notifications');
+  },
+
+  // ── facility booking ──
+  listBookings: () => delay(db.bookings),
+
+  async createBooking(userId, input) {
+    const live = db.bookings.filter(
+      (b) => !b.cancelled && b.facilityId === input.facilityId && b.date === input.date,
+    );
+    if (live.some((b) => b.slot === input.slot)) throw new Error('Sorry — that slot was just taken.');
+    if (live.some((b) => b.userId === userId))
+      throw new Error('You already have a booking for this facility on that day.');
+    const b: FacilityBooking = { id: uid('b'), userId, ...input, createdAt: now() };
+    db.bookings.push(b);
+    const f = facilityMeta(input.facilityId);
+    notify(
+      staffIds('management'),
+      `${f.icon} New booking`,
+      `${firstName(userId)} · ${f.name} · ${input.date} ${input.slot}`,
+      { kind: 'booking', id: b.id },
+    );
+    commit('bookings', 'notifications');
+    return delay(b);
+  },
+
+  async cancelBooking(id, byUserId) {
+    const b = db.bookings.find((x) => x.id === id);
+    if (!b) return;
+    b.cancelled = true;
+    if (byUserId !== b.userId) {
+      notify(
+        [b.userId],
+        'Booking cancelled by management',
+        `${facilityMeta(b.facilityId).name} · ${b.date} ${b.slot}`,
+        { kind: 'booking', id },
+      );
+    }
+    commit('bookings', 'notifications');
+  },
+
+  // ── visitors ──
+  listVisitors: () => delay(db.visitors),
+
+  async createVisitor(byUserId, input) {
+    const walkIn = db.users.find((u) => u.id === byUserId)?.role !== 'resident';
+    const t = now();
+    const v: VisitorPass = {
+      id: uid('v'),
+      hostId: walkIn ? undefined : byUserId,
+      ...input,
+      code: walkIn ? 'WALKIN' : passCode(),
+      status: walkIn ? 'checked-in' : 'expected',
+      createdAt: t,
+      checkedInAt: walkIn ? t : undefined,
+    };
+    db.visitors.unshift(v);
+    if (walkIn) {
+      notify(
+        unitResidentIds(input.unitId),
+        '🚗 Visitor at the gate',
+        `${input.visitorName} has been let in.`,
+        {
+          kind: 'visitor',
+          id: v.id,
+        },
+      );
+    } else {
+      notify(
+        staffIds('guard'),
+        '🪪 Visitor pre-registered',
+        `${input.visitorName} → ${input.unitId}${input.plate ? ` · ${input.plate}` : ''} · ${input.date}`,
+        { kind: 'visitor', id: v.id },
+      );
+    }
+    commit('visitors', 'notifications');
+    return delay(v);
+  },
+
+  async updateVisitor(id, byUserId, status) {
+    const v = db.visitors.find((x) => x.id === id);
+    if (!v) return;
+    v.status = status;
+    if (status === 'checked-in') v.checkedInAt = now();
+    if (status === 'checked-out') v.checkedOutAt = now();
+    if (status === 'checked-in' && v.hostId && v.hostId !== byUserId) {
+      notify([v.hostId], '🚗 Your visitor has arrived', `${v.visitorName} checked in at the guardhouse.`, {
+        kind: 'visitor',
+        id,
+      });
+    }
+    if (status === 'cancelled' && v.hostId === byUserId) {
+      notify(staffIds('guard'), 'Visitor pass cancelled', `${v.visitorName} → ${v.unitId}`, {
+        kind: 'visitor',
+        id,
+      });
+    }
+    commit('visitors', 'notifications');
+  },
+
+  // ── events ──
+  listEvents: () => delay(db.events),
+
+  async createEvent(organiserId, input) {
+    const e: CommunityEvent = { id: uid('e'), organiserId, ...input, rsvps: [], createdAt: now() };
+    db.events.push(e);
+    notify(residentIdsIn([]), `${input.icon} New event: ${input.title}`, input.venue, {
+      kind: 'event',
+      id: e.id,
+    });
+    commit('events', 'notifications');
+    return delay(e);
+  },
+
+  async toggleRsvp(id, userId) {
+    const e = db.events.find((x) => x.id === id);
+    if (!e) return;
+    if (e.rsvps.includes(userId)) e.rsvps = e.rsvps.filter((r) => r !== userId);
+    else if (e.capacity && e.rsvps.length >= e.capacity) throw new Error('Sorry — this event is full.');
+    else e.rsvps.push(userId);
+    commit('events');
+  },
+
+  async cancelEvent(id) {
+    const e = db.events.find((x) => x.id === id);
+    if (!e) return;
+    db.events = db.events.filter((x) => x.id !== id);
+    notify(e.rsvps, `Event cancelled: ${e.title}`, 'Sorry for the inconvenience — Management Office.');
+    commit('events', 'notifications');
+  },
+
+  // ── parcels ──
+  listParcels: () => delay(db.parcels),
+
+  async logParcel(byUserId, input) {
+    const p: Parcel = { id: uid('pc'), ...input, loggedBy: byUserId, loggedAt: now() };
+    db.parcels.unshift(p);
+    notify(
+      unitResidentIds(input.unitId),
+      '📦 Parcel at the guardhouse',
+      `${input.courier}${input.note ? ` · ${input.note}` : ''} — collect any time.`,
+      { kind: 'parcel', id: p.id },
+    );
+    commit('parcels', 'notifications');
+    return delay(p);
+  },
+
+  async collectParcel(id) {
+    const p = db.parcels.find((x) => x.id === id);
+    if (!p || p.collectedAt) return;
+    p.collectedAt = now();
+    commit('parcels');
+  },
+
+  // ── maintenance fees ──
+  listFees: () => delay(db.fees),
+
+  async payFee(id, userId) {
+    const f = db.fees.find((x) => x.id === id);
+    if (!f || f.paidAt) return;
+    f.paidAt = now();
+    f.reference = `EGR${Date.now().toString().slice(-6)}`;
+    notify(
+      staffIds('management'),
+      '🧾 Fee payment received',
+      `${f.unitId} · ${f.period} · by ${firstName(userId)}`,
+      { kind: 'fee', id },
+    );
+    commit('fees', 'notifications');
+  },
+
+  async remindFee(id) {
+    const f = db.fees.find((x) => x.id === id);
+    if (!f || f.paidAt) return;
+    notify(
+      unitResidentIds(f.unitId),
+      '🧾 Maintenance fee reminder',
+      `Your ${f.period} statement is due on ${f.dueDate}.`,
+      { kind: 'fee', id },
+    );
+    commit('notifications');
+  },
+
+  // ── swap corner ──
+  listListings: () => delay(db.listings),
+
+  async createListing(authorId, input) {
+    const l: Listing = { id: uid('l'), authorId, ...input, status: 'available', createdAt: now() };
+    db.listings.unshift(l);
+    commit('listings');
+    return delay(l);
+  },
+
+  async updateListing(id, status) {
+    const l = db.listings.find((x) => x.id === id);
+    if (!l) return;
+    l.status = status;
+    commit('listings');
+  },
+
+  async removeListing(id) {
+    db.listings = db.listings.filter((x) => x.id !== id);
+    commit('listings');
+  },
+
+  // ── lost & found ──
+  listLostFound: () => delay(db.lostFound),
+
+  async createLostFound(authorId, input) {
+    const item: LostFoundItem = { id: uid('lf'), authorId, ...input, resolved: false, createdAt: now() };
+    db.lostFound.unshift(item);
+    commit('lostFound');
+    return delay(item);
+  },
+
+  async resolveLostFound(id) {
+    const item = db.lostFound.find((x) => x.id === id);
+    if (!item) return;
+    item.resolved = true;
+    commit('lostFound');
+  },
+
+  async removeLostFound(id) {
+    db.lostFound = db.lostFound.filter((x) => x.id !== id);
+    commit('lostFound');
+  },
+
+  // ── polls ──
+  listPolls: () => delay(db.polls),
+
+  async createPoll(authorId, input) {
+    const poll: Poll = {
+      id: uid('poll'),
+      authorId,
+      question: input.question,
+      options: input.options.map((label, i) => ({ id: `o${i + 1}`, label, votes: [] })),
+      targetPrecincts: input.targetPrecincts,
+      closesAt: input.closesAt,
+      createdAt: now(),
+    };
+    db.polls.unshift(poll);
+    notify(residentIdsIn(input.targetPrecincts), '📊 New poll', input.question.slice(0, 80), {
+      kind: 'poll',
+      id: poll.id,
+    });
+    commit('polls', 'notifications');
+    return delay(poll);
+  },
+
+  async votePoll(id, optionId, userId) {
+    const poll = db.polls.find((x) => x.id === id);
+    if (!poll || new Date(poll.closesAt).getTime() < Date.now()) return;
+    for (const o of poll.options) {
+      o.votes = o.votes.filter((v) => v !== userId);
+      if (o.id === optionId) o.votes.push(userId);
+    }
+    commit('polls');
+  },
+
+  async closePoll(id) {
+    const poll = db.polls.find((x) => x.id === id);
+    if (!poll) return;
+    poll.closesAt = now();
+    commit('polls');
   },
 
   heartbeat(role) {
